@@ -33,7 +33,16 @@ export const TYPES = {
   CustomAssetMetaData: A('CustomAssetMetaData'),
   MetaType: A('CustomAssetMetaData+Type'),
   ItemClass: A('ItemClass'),
-  PackageAsset: `ColossalFramework.Packaging.Package+Asset, ICities, Version=0.3.0.0, Culture=neutral, PublicKeyToken=null`,
+  PackageAsset: 'ColossalFramework.Packaging.Package+Asset, ColossalManaged, Version=0.3.0.0, Culture=neutral, PublicKeyToken=null',
+  Image: 'ColossalFramework.Importers.Image, ColossalManaged, Version=0.3.0.0, Culture=neutral, PublicKeyToken=null',
+  PropInfoGen: A('PropInfoGen'),
+  Vector3: U('UnityEngine.Vector3'),
+  ModInfoArray: A('ModInfo[]'),
+  Level: A('ItemClass+Level'),
+  Service: A('ItemClass+Service'),
+  SubService: A('ItemClass+SubService'),
+  VehicleType: A('VehicleInfo+VehicleType'),
+  DlcMask: A('SteamHelper+DLC_BitMask'),
   Single: S('System.Single'),
   Boolean: S('System.Boolean'),
   Int32: S('System.Int32'),
@@ -86,10 +95,10 @@ function materialAsset(name, shader, colors, textures) {
 
 function prop(w, type, name, writeValue) { w.bool(false).str(type).str(name); writeValue(w); }
 
-function gameObjectAsset(name, meshChecksum, materialChecksum, propParams) {
+function gameObjectAsset(name, meshChecksum, materialChecksum, genChecksum, propParams) {
   const w = new ByteWriter(4096);
   w.bool(false).str(TYPES.GameObject).str(name);
-  w.str('Untagged').i32(0).bool(true);
+  w.str('Untagged').i32(0).bool(false);
   w.i32(4); // components
   w.bool(false).str(TYPES.Transform).v3(0, 0, 0).v4(0, 0, 0, 1).v3(1, 1, 1);
   w.bool(false).str(TYPES.MeshFilter).str(meshChecksum);
@@ -103,25 +112,86 @@ function gameObjectAsset(name, meshChecksum, materialChecksum, propParams) {
     [TYPES.Boolean, 'm_isMarker', (x) => x.bool(false)],
     [TYPES.Boolean, 'm_hasRenderer', (x) => x.bool(true)],
     [TYPES.Single, 'm_lodRenderDistance', (x) => x.f32(propParams.lodDistance)],
+    [TYPES.PropInfoGen, 'm_generatedInfo', (x) => x.str(genChecksum)],
   ];
   w.i32(fields.length);
   for (const [t, n, fn] of fields) prop(w, t, n, fn);
   return w.result();
 }
 
-function metadataAsset(name, objectChecksum, tags, when) {
-  const w = new ByteWriter(2048);
+// Member list copied from a genuine package (CustomAssetMetaData, 24 members) - the game reads members by name.
+function metadataAsset(name, refs, tags, when, extra) {
+  const w = new ByteWriter(4096);
   w.bool(false).str(TYPES.CustomAssetMetaData).str(name);
+  const I = (v) => (x) => x.i32(v);
   const fields = [
     [TYPES.String, 'name', (x) => x.str(name)],
     [TYPES.DateTime, 'timeStamp', (x) => x.str(when)],
-    [TYPES.MetaType, 'type', (x) => x.i32(META_TYPE_PROP)],
+    [TYPES.PackageAsset, 'imageRef', (x) => x.str(refs.snapshot)],
+    [TYPES.PackageAsset, 'steamPreviewRef', (x) => x.str(refs.steamPreview)],
     [TYPES.StringArray, 'steamTags', (x) => { x.i32(tags.length); for (const t of tags) x.str(t); }],
-    [TYPES.PackageAsset, 'assetRef', (x) => x.str(objectChecksum)],
+    [TYPES.String, 'guid', (x) => x.str(extra.guid)],
+    [TYPES.MetaType, 'type', I(META_TYPE_PROP)],
+    [TYPES.ModInfoArray, 'mods', I(0)],
+    [TYPES.Int32, 'width', I(0)],
+    [TYPES.Int32, 'length', I(0)],
+    [TYPES.Level, 'level', I(0)],
+    [TYPES.Service, 'service', I(0)],
+    [TYPES.SubService, 'subService', I(0)],
+    [TYPES.VehicleType, 'vehicleType', I(0)],
+    [TYPES.DlcMask, 'dlcMask', I(0)],
+    [TYPES.Int32, 'triangles', I(extra.triangles)],
+    [TYPES.Int32, 'lodTriangles', I(0)],
+    [TYPES.Int32, 'textureHeight', I(extra.textureSize)],
+    [TYPES.Int32, 'textureWidth', I(extra.textureSize)],
+    [TYPES.Int32, 'lodTextureHeight', I(0)],
+    [TYPES.Int32, 'lodTextureWidth', I(0)],
+    [TYPES.String, 'templateName', (x) => x.str('')],
+    [TYPES.PackageAsset, 'userDataRef', (x) => x.str(refs.userData)],
+    [TYPES.PackageAsset, 'assetRef', (x) => x.str(refs.object)],
   ];
   w.i32(fields.length);
   for (const [t, n, fn] of fields) prop(w, t, n, fn);
   return w.result();
+}
+
+// Preview images are stored as ColossalFramework.Importers.Image: bool, i32 (1), u32 length, PNG bytes.
+function imageAsset(name, png) {
+  const w = new ByteWriter(png.length + 256);
+  w.bool(false).str(TYPES.Image).str(name);
+  w.bool(false).i32(1).u32(png.length).bytes(png);
+  return w.result();
+}
+
+// Constant asset present in every package (copied byte-for-byte from a genuine package: empty UserAssetData dictionary).
+const USER_ASSET_DATA = Uint8Array.from(Buffer.from('AGZBc3NldERhdGFXcmFwcGVyK1VzZXJBc3NldERhdGEsIEFzc2VtYmx5LUNTaGFycCwgVmVyc2lvbj0wLjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwNVXNlckFzc2V0RGF0YQEAAAAArwJTeXN0ZW0uQ29sbGVjdGlvbnMuR2VuZXJpYy5EaWN0aW9uYXJ5YDJbW1N5c3RlbS5TdHJpbmcsIG1zY29ybGliLCBWZXJzaW9uPTIuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49Yjc3YTVjNTYxOTM0ZTA4OV0sW1N5c3RlbS5CeXRlW10sIG1zY29ybGliLCBWZXJzaW9uPTIuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49Yjc3YTVjNTYxOTM0ZTA4OV1dLCBtc2NvcmxpYiwgVmVyc2lvbj0yLjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPWI3N2E1YzU2MTkzNGUwODkLbV9Bc3NldERhdGEAAAAA', 'base64'));
+
+// PropInfoGen: size and surface areas of the mesh (used by the game for LOD / generated data).
+function genAsset(name, g) {
+  const w = new ByteWriter(1024);
+  w.bool(false).str(TYPES.PropInfoGen).str(name);
+  const fields = [
+    [TYPES.Vector3, 'm_size', (x) => x.v3(g.size[0], g.size[1], g.size[2])],
+    [TYPES.Single, 'm_triangleArea', (x) => x.f32(g.triangleArea)],
+    [TYPES.Single, 'm_uvmapArea', (x) => x.f32(g.uvmapArea)],
+  ];
+  w.i32(fields.length);
+  for (const [t, n, fn] of fields) prop(w, t, n, fn);
+  return w.result();
+}
+
+function meshStats(m) {
+  let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity], tri = 0, uv = 0;
+  for (let i = 0; i < m.vertexCount; i++) for (let k = 0; k < 3; k++) { const v = m.positions[i * 3 + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v; }
+  for (let i = 0; i < m.indices.length; i += 3) {
+    const a = m.indices[i] * 3, b = m.indices[i + 1] * 3, c = m.indices[i + 2] * 3;
+    const e1 = [m.positions[b] - m.positions[a], m.positions[b + 1] - m.positions[a + 1], m.positions[b + 2] - m.positions[a + 2]];
+    const e2 = [m.positions[c] - m.positions[a], m.positions[c + 1] - m.positions[a + 1], m.positions[c + 2] - m.positions[a + 2]];
+    tri += 0.5 * Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]);
+    const ua = m.indices[i] * 2, ub = m.indices[i + 1] * 2, uc = m.indices[i + 2] * 2;
+    uv += 0.5 * Math.abs((m.uvs[ub] - m.uvs[ua]) * (m.uvs[uc + 1] - m.uvs[ua + 1]) - (m.uvs[uc] - m.uvs[ua]) * (m.uvs[ub + 1] - m.uvs[ua + 1]));
+  }
+  return { size: [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]], triangleArea: tri, uvmapArea: uv };
 }
 
 // ---- texture maps ------------------------------------------------------------------------------
@@ -149,8 +219,9 @@ export function buildMaps(size, faceV0, mat) {
   return { xys, aci };
 }
 
-export function buildCrp({ name, author = '', tags = [], mesh, atlas, faceV0, mat, whenIso }) {
+export function buildCrp({ name, author = '', tags = [], mesh, atlas, faceV0, mat, whenIso, snapshotPng, steamPng }) {
   if (!name) throw new Error('asset name required');
+  if (!snapshotPng || !steamPng) throw new Error('preview images required');
   const size = atlas.width;
   if (atlas.width !== atlas.height || (size & (size - 1)) !== 0) throw new Error('atlas must be a square power-of-two texture');
   const unity = toUnity(mesh);
@@ -159,6 +230,8 @@ export function buildCrp({ name, author = '', tags = [], mesh, atlas, faceV0, ma
   const parts = [];
   const add = (assetName, type, bytes) => { const rec = { assetName, type, bytes, checksum: md5(bytes) }; parts.push(rec); return rec; };
 
+  const steam = add(`${name}_SteamPreview`, ASSET_TYPE.Texture, imageAsset(`${name}_SteamPreview`, steamPng));
+  const snap = add(`${name}_Snapshot`, ASSET_TYPE.Texture, imageAsset(`${name}_Snapshot`, snapshotPng));
   const dMain = add(`${name}_d`, ASSET_TYPE.Texture, textureAsset(`${name}_d`, encodeDDS({ width: size, height: size, rgba: atlas.data, format: 'DXT1' }), false));
   const dXys = add(`${name}_s`, ASSET_TYPE.Texture, textureAsset(`${name}_s`, encodeDDS({ width: size, height: size, rgba: maps.xys, format: 'DXT5' }), true));
   const dAci = add(`${name}_i`, ASSET_TYPE.Texture, textureAsset(`${name}_i`, encodeDDS({ width: size, height: size, rgba: maps.aci, format: 'DXT1' }), true));
@@ -166,14 +239,22 @@ export function buildCrp({ name, author = '', tags = [], mesh, atlas, faceV0, ma
     ['_MainTex', dMain.checksum], ['_XYSMap', dXys.checksum], ['_ACIMap', dAci.checksum],
   ]));
   const meshRec = add(`${name}_Mesh`, ASSET_TYPE.StaticMesh, meshAsset(`${name}_Mesh`, unity));
-  const objRec = add(`${name}_Data`, ASSET_TYPE.Object, gameObjectAsset(`${name}_Data`, meshRec.checksum, mat_.checksum, { itemClass: 'Beautification Item', lodDistance: 1000 }));
-  const metaRec = add(name, ASSET_TYPE.UserMetaData, metadataAsset(name, objRec.checksum, tags, whenIso || new Date().toISOString().replace('Z', '')));
+  // generated-info companion: its entry name carries its own checksum, like genuine packages ("<name>_Data - <md5>")
+  const genBytes = genAsset(`${name}_Data`, meshStats(unity));
+  const genChecksum = md5(genBytes);
+  const genRec = { assetName: `${name}_Data - ${genChecksum}`, type: ASSET_TYPE.Object, bytes: genBytes, checksum: genChecksum }; parts.push(genRec);
+  const objRec = add(`${name}_Data`, ASSET_TYPE.Object, gameObjectAsset(`${name}_Data`, meshRec.checksum, mat_.checksum, genChecksum, { itemClass: 'Beautification Item', lodDistance: 1000 }));
+  const userRec = add('UserAssetData', ASSET_TYPE.Object, USER_ASSET_DATA);
+  const when = (whenIso || new Date().toISOString()).replace('Z', '0000+00:00');
+  const metaRec = add(name, ASSET_TYPE.UserMetaData, metadataAsset(name,
+    { snapshot: snap.checksum, steamPreview: steam.checksum, userData: userRec.checksum, object: objRec.checksum },
+    tags, when, { guid: crypto.randomUUID(), triangles: mesh.triangleCount, textureSize: size }));
 
-  // order like real packages: main metadata first, then object, then dependencies
-  const ordered = [metaRec, objRec, meshRec, mat_, dMain, dXys, dAci];
+  // same order as genuine packages: previews, dependencies, prefab, user data, then the main metadata asset
+  const ordered = [steam, snap, dMain, dXys, dAci, mat_, meshRec, genRec, objRec, userRec, metaRec];
   const writeHeader = (contentStart, offsets) => {
     const h = new ByteWriter(4096);
-    h.ascii('CRAP').u16(CRP_FORMAT_VERSION).str(name).str(author).u32(2).str(name);
+    h.ascii('CRAP').u16(CRP_FORMAT_VERSION).str(name).str(author).u32(0).str(name);
     h.i32(ordered.length).i64(contentStart);
     ordered.forEach((p, i) => h.str(p.assetName).str(p.checksum).i32(p.type).i64(offsets[i]).i64(p.bytes.length));
     return h;

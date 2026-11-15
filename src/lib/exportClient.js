@@ -3,6 +3,7 @@
 import { registry, renderDesign } from './registry.js';
 import { composeAtlas, materialSpec } from './atlas.js';
 import { ensureFonts } from './fonts.js';
+import { getSavedToken } from './authorToken.js';
 
 export function buildSpec(structure) {
   return { kind: structure.kind, board: structure.board, poles: structure.poles, flag: structure.flag };
@@ -21,6 +22,10 @@ export function download(blob, fileName) {
 export async function runExport(project, { format = 'crp', onStep = () => {} } = {}) {
   const { structure, export: ex } = project;
   const size = ex.resolution || 1024;
+  const authorToken = ex.authorToken || getSavedToken();
+  if (format === 'crp' && !authorToken) {
+    throw new Error('Author ID missing. Open the Export tab, click "Choose a real .crp…" and pick any package from your game (e.g. a Workshop asset). The game refuses packages without it.');
+  }
   onStep('Loading fonts');
   await ensureFonts(project.elements);
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -32,7 +37,7 @@ export async function runExport(project, { format = 'crp', onStep = () => {} } =
   const fd = new FormData();
   fd.append('texture', png, 'atlas.png');
   fd.append('payload', JSON.stringify({
-    format, name: ex.assetName || project.name, author: ex.author || '',
+    format, name: ex.assetName || project.name, author: authorToken,
     tags: (ex.tags || '').split(',').map((s) => s.trim()).filter(Boolean),
     spec: buildSpec(structure), mat: materialSpec(structure),
   }));

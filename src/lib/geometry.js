@@ -269,5 +269,11 @@ export function toUnity(mesh) {
     normals[i * 3] = mesh.normals[i * 3]; normals[i * 3 + 1] = mesh.normals[i * 3 + 1]; normals[i * 3 + 2] = -mesh.normals[i * 3 + 2];
     tangents[i * 4] = mesh.tangents[i * 4]; tangents[i * 4 + 1] = mesh.tangents[i * 4 + 1]; tangents[i * 4 + 2] = -mesh.tangents[i * 4 + 2]; tangents[i * 4 + 3] = -mesh.tangents[i * 4 + 3];
   }
-  return { ...mesh, positions, normals, tangents };
+  // Mirroring Z keeps the screen-space winding counter-clockwise, but Unity front faces are clockwise:
+  // reverse every triangle. Unity also reads DDS rows bottom-up, so flip V.
+  const indices = mesh.indices.slice();
+  for (let i = 0; i + 2 < indices.length; i += 3) { const t = indices[i + 1]; indices[i + 1] = indices[i + 2]; indices[i + 2] = t; }
+  const uvs = new Float32Array(mesh.uvs.length);
+  for (let i = 0; i < uvs.length; i += 2) { uvs[i] = mesh.uvs[i]; uvs[i + 1] = 1 - mesh.uvs[i + 1]; }
+  return { ...mesh, positions, normals, tangents, indices, uvs };
 }

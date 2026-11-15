@@ -37,7 +37,7 @@ const cases = {
 let failed = 0;
 for (const [label, spec] of Object.entries(cases)) {
   try {
-    const r = generateCrp({ spec, atlasPng: atlasPng(256), name: `Test ${label}`, author: '', tags: ['Prop', 'Signboard'], mat });
+    const r = generateCrp({ spec, atlasPng: atlasPng(256), name: `Test ${label}`, author: 'tkdsH5a1WOzwEGOOMg5yMx/hlUzIKAa1nNE1xwtqzBw=', tags: ['Prop', 'Signboard'], mat });
     fs.writeFileSync(path.join(out, r.fileName), r.bytes);
     const again = readCrp(r.bytes);
     const bad = again.checks.filter((c) => !c.ok);

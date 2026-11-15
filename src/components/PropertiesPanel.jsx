@@ -10,6 +10,8 @@ import VerticalAlignTop from '@mui/icons-material/VerticalAlignTop';
 import VerticalAlignCenter from '@mui/icons-material/VerticalAlignCenter';
 import VerticalAlignBottom from '@mui/icons-material/VerticalAlignBottom';
 import { useStore } from '../store/useStore.js';
+import { readReferenceHeader } from '../lib/crp/refHeader.js';
+import { getSavedToken, saveToken } from '../lib/authorToken.js';
 import { Section, Field, Num, Color, Sel, Check, IconBtn, Btn } from './ui.jsx';
 import { FONT_GROUPS, registerFontFile } from '../lib/fonts.js';
 import { SHAPES } from '../lib/shapes.js';
@@ -336,7 +338,19 @@ function ExportTab() {
     <div>
       <Section title="CRP asset">
         <Field label="Asset name"><input className="h-7 w-full rounded border border-ink-500 bg-ink-900 px-2 text-[12px] outline-none focus:border-saffron" placeholder={p.name} value={ex.assetName} onChange={(e) => pe({ assetName: e.target.value })} /></Field>
-        <Field label="Author"><input className="h-7 w-full rounded border border-ink-500 bg-ink-900 px-2 text-[12px] outline-none focus:border-saffron" value={ex.author} onChange={(e) => pe({ author: e.target.value })} /></Field>
+        <Field label="Author ID (required)">
+          <div className="space-y-1">
+            <div className={`rounded border px-2 py-1 text-[11px] ${(ex.authorToken || getSavedToken()) ? 'border-emerald-700 text-emerald-400' : 'border-red-700 text-red-400'}`}>
+              {(ex.authorToken || getSavedToken()) ? 'Author ID loaded from a real .crp' : 'Not set: the game rejects packages without it'}
+            </div>
+            <label className="inline-flex h-7 cursor-pointer items-center rounded border border-ink-500 bg-ink-700 px-2.5 text-[12px] text-slate-200 hover:bg-ink-600">Choose a real .crp…<input type="file" accept=".crp" hidden onChange={async (e) => {
+              const f = e.target.files?.[0]; if (!f) return;
+              try { const h = readReferenceHeader(await f.arrayBuffer()); saveToken(h.author); pe({ authorToken: h.author }); st.notify('Author ID loaded from ' + f.name, 'success'); } catch (err) { st.notify(err.message, 'error'); }
+              e.target.value = '';
+            }} /></label>
+            <p className="text-[11px] leading-snug text-slate-500">Pick any package from your game (a Workshop asset in the Steam workshop content folder, or one you saved in the Asset Editor). Only its author ID is copied. It is remembered on this PC.</p>
+          </div>
+        </Field>
         <Field label="Tags"><input className="h-7 w-full rounded border border-ink-500 bg-ink-900 px-2 text-[12px] outline-none focus:border-saffron" value={ex.tags} onChange={(e) => pe({ tags: e.target.value })} /></Field>
         <Sel label="Texture size" value={String(ex.resolution)} options={[{ value: '512', label: '512 × 512 (small)' }, { value: '1024', label: '1024 × 1024 (recommended)' }, { value: '2048', label: '2048 × 2048 (sharp text)' }]} onChange={(v) => pe({ resolution: Number(v) })} />
         <p className="text-[11px] leading-snug text-slate-500">Output: DXT-compressed diffuse + XYS + ACI maps with mip-maps, a single-material Prop mesh, packaged as a CRAP v6 asset. Use the big button in the top bar.</p>
