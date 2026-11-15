@@ -1,0 +1,34 @@
+{
+  "name": "signboard-flag-creator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Signboard / Flag Creator for Cities: Skylines 1 - design Indian-style signboards and flags, preview in 3D, export genuine .crp assets",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "test:crp": "node scripts/test-crp.mjs"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@mui/icons-material": "^5.15.20",
+    "@mui/material": "^5.15.20",
+    "@react-three/drei": "^9.105.6",
+    "@react-three/fiber": "^8.16.8",
+    "konva": "^9.3.14",
+    "next": "14.2.35",
+    "pngjs": "^7.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-konva": "^18.2.10",
+    "three": "^0.165.0",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4"
+  },
+  "type": "module"
+}
